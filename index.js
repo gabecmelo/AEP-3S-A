@@ -8,6 +8,7 @@ const SIM_DURATION_MS = 60 * 1000;
 const ROAD_COLOR = '#999';
 const VIADUCT_COLOR = '#777';
 const CAR_COLOR = '#3498db';
+const CAR_COLLIDED_COLOR ='#e67e22';
 // Tamanho do raio dos carros em pixels
 const CAR_RADIUS = 8;
 // Largura das estradas em pixels
@@ -147,8 +148,8 @@ function drawTrafficLights() {
 
 // Desenha todos os carros presentes no array "cars"
 function drawCars() {
-  ctx.fillStyle = CAR_COLOR;
-  for (const car of cars) {
+    for (const car of cars) {
+    ctx.fillStyle = car.collided ? CAR_COLLIDED_COLOR : CAR_COLOR;
     ctx.beginPath();
     ctx.arc(car.x, car.y, car.radius, 0, 2 * Math.PI);
     ctx.fill();
@@ -254,6 +255,9 @@ function updateCars(dt) {
         // Em caso de colisão, ambos param
         willStop[i] = true;
         willStop[j] = true;
+
+        car.collided = true;
+        other.collided = true;
       }
     }
 
