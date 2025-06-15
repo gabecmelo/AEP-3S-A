@@ -36,7 +36,7 @@ const CAR_SPEED = 100;
 const MIN_GAP = CAR_RADIUS * 2 + 4;
 
 // Quantidade de carros em cada sentido/faixa
-const NUM_CARS_VERTICAL = 8;         // Carros que vêm da base para cima
+const NUM_CARS_VERTICAL = 8;         // Carros que vêm verticalmente
 const NUM_CARS_LEFT_TO_RIGHT = 8;    // Carros que vêm da esquerda para a direita e depois sobem
 const NUM_CARS_RIGHT_TO_LEFT = 5;    // Carros que vêm da direita para a esquerda
 
@@ -49,6 +49,8 @@ const cars = [];        // Array que armazena todos os carros na simulação
 
 // Flag para habilitar/desabilitar semáforos
 let signalsEnabled = true;
+// Flag para alternar viaduto: false = primeiro viaduto (Maringá), true = segundo (Água boa)
+let useSecondViaduct = false;
 
 // Função para adicionar um carro ao array de carros
 // x: posição inicial X do carro
@@ -57,43 +59,68 @@ let signalsEnabled = true;
 // dy: direção vertical (-1, 0 ou 1)
 // turnsUp: indica se o carro deve curvar para cima ao atingir a estrada principal
 function addCar(x, y, dx, dy, turnsUp = false) {
-  cars.push({ x, y, dx, dy, speed: CAR_SPEED, radius: CAR_RADIUS, turnsUp });
+  cars.push({ x, y, dx, dy, speed: CAR_SPEED, radius: CAR_RADIUS, turnsUp, collided: false });
 }
 
-// Inicializa todos os carros posicionando-os fora da tela
+// Inicializa todos os carros posicionando-os fora da tela, conforme viaduto selecionado
 function initCars() {
-  // Limpa qualquer carro existente
   cars.length = 0;
 
-  // --- Carros verticais (vindo da base para cima) ---
-  for (let i = 0; i < NUM_CARS_VERTICAL; i++) {
-    // Posiciona o carro acima da tela, alinhado à esquerda da faixa vertical
-    addCar(
-      MAIN_ROAD_X - LANE_OFFSET,  // x
-      -20 - i * 100,              // y (fora da tela, espaçado a cada 100px)
-      0,                          // dx = sem movimento horizontal
-      1                           // dy = movimento para baixo para cima
-    );
+  // --- Carros verticais ---
+  if (!useSecondViaduct) {
+    // Primeiro viaduto (Maringá): fluxo original vertical (faixa esquerda, de cima para baixo)
+    for (let i = 0; i < NUM_CARS_VERTICAL; i++) {
+      addCar(
+        MAIN_ROAD_X - LANE_OFFSET,  // faixa esquerda vertical
+        -20 - i * 100,              // fora da tela acima
+        0,
+        1
+      );
+      // marca esse carro para virar à direita ao atingir a via horizontal inferior
+      cars[cars.length - 1].turnsRight = true;
+    }
+  } else {
+    // Segundo viaduto (Água boa):
+    // 1) Mantém também o fluxo original vertical (faixa esquerda, de cima para baixo)
+    for (let i = 0; i < NUM_CARS_VERTICAL; i++) {
+      addCar(
+        MAIN_ROAD_X - LANE_OFFSET,
+        -20 - i * 100,
+        0,
+        1
+      );
+      cars[cars.length - 1].turnsRight = true;
+    }
+    // 2) Novo fluxo vertical no sentido inverso (faixa direita, de baixo para cima)
+    for (let i = 0; i < NUM_CARS_VERTICAL; i++) {
+      addCar(
+        MAIN_ROAD_X + LANE_OFFSET,      // faixa direita vertical
+        canvas.height + 20 + i * 100,   // fora da tela abaixo
+        0,
+        -1
+      );
+      // opcional: se quiser curva ao encontrar cruzamento, mas não foi solicitado
+    }
   }
 
   // --- Carros vindos da esquerda para a direita que viram para cima ---
   for (let i = 0; i < NUM_CARS_LEFT_TO_RIGHT; i++) {
     addCar(
-      -20 - i * 120,                        // x inicial fora da tela à esquerda
-      BOTTOM_ROAD_Y + ROAD_WIDTH / 2 - 10,  // y próximo à estrada horizontal inferior
-      1,                                    // dx = movimento para a direita
-      0,                                    // dy = sem movimento vertical
-      true                                  // turnsUp = irá curvar para cima
+      -20 - i * 120,
+      BOTTOM_ROAD_Y + ROAD_WIDTH / 2 - 10,
+      1,
+      0,
+      true
     );
   }
 
   // --- Carros vindos da direita para a esquerda ---
   for (let i = 0; i < NUM_CARS_RIGHT_TO_LEFT; i++) {
     addCar(
-      canvas.width + 20 + i * 120,         // x inicial fora da tela à direita
-      TOP_ROAD_Y - ROAD_WIDTH / 2 + 10,     // y próximo à estrada horizontal superior
-      -1,                                   // dx = movimento para a esquerda
-      0                                     // dy = sem movimento vertical
+      canvas.width + 20 + i * 120,
+      TOP_ROAD_Y - ROAD_WIDTH / 2 + 10,
+      -1,
+      0
     );
   }
 }
@@ -120,7 +147,7 @@ function drawRoads() {
     ROAD_WIDTH
   );
 
-  // Viaduto (reta central mais escura)
+  // Viaduto: apenas desenho visual. Se quiser, podemos mudar cor ou texto indicando Maringá/Água boa.
   ctx.fillStyle = VIADUCT_COLOR;
   ctx.fillRect(
     0,
@@ -128,12 +155,18 @@ function drawRoads() {
     canvas.width,
     VIADUCT_HEIGHT
   );
+
+  // Texto indicando qual saída está ativa
+  ctx.fillStyle = '#fff';
+  ctx.font = '16px Arial';
+  ctx.textAlign = 'center';
+  const label = useSecondViaduct ? 'Saída para Água boa' : 'Saída para Maringá';
+  ctx.fillText(label, canvas.width / 2, canvas.height / 2 + 5);
 }
 
 // Desenha os semáforos posicionados no cruzamento
-// Cada objeto em "lights" contém x, y e a fase em que fica verde
 function drawTrafficLights() {
-  if (!signalsEnabled) return;  // Se semáforos desabilitados, não desenha nada
+  if (!signalsEnabled) return;
 
   const centerX = MAIN_ROAD_X;
   const centerY = TOP_ROAD_Y;
@@ -145,7 +178,6 @@ function drawTrafficLights() {
   ];
 
   for (const light of lights) {
-    // Semáforo verde somente na fase correspondente; caso contrário, vermelho
     ctx.fillStyle = (currentPhase === light.phase) ? 'green' : 'red';
     ctx.beginPath();
     ctx.arc(light.x, light.y, LIGHT_SIZE, 0, 2 * Math.PI);
@@ -163,56 +195,60 @@ function drawCars() {
   }
 }
 
-// Atualiza o temporizador dos semáforos e alterna a fase quando o tempo excede PHASE_DURATION
-// dt: delta time em milissegundos desde a última atualização
+// Atualiza o temporizador dos semáforos
 function updateLights(dt) {
-  if (!signalsEnabled) return;  // Se semáforos desabilitados, não atualiza fases
+  if (!signalsEnabled) return;
 
   phaseTime += dt;
   if (phaseTime >= PHASE_DURATION) {
-    // Avança para a próxima fase (cíclica de 0 a 2)
     currentPhase = (currentPhase + 1) % 3;
     phaseTime = 0;
   }
 }
 
-// Atualiza a posição dos carros, considerando semáforos e colisões
-// dt: delta time em milissegundos desde a última atualização
+// Atualiza a posição dos carros, considerando semáforos, colisões e curvas
 function updateCars(dt) {
-  // Indica se cada carro deve parar nesta iteração
   const willStop = Array(cars.length).fill(false);
 
-  // Primeiro passo: verifica semáforo (se habilitado) e carros à frente
+  // Primeiro passo: semáforos, detecção de proximidade, curvas
   for (let i = 0; i < cars.length; i++) {
     const car = cars[i];
 
-    // Se o carro deve curvar para cima ao alcançar a estrada principal
+    // Nova lógica: curva para a direita se configurado e na linha da via horizontal inferior
+    if (car.turnsRight && car.dy === 1 &&
+        car.x === MAIN_ROAD_X - LANE_OFFSET &&
+        car.y + car.radius >= BOTTOM_ROAD_Y + 45 && !useSecondViaduct) {
+      // Ajusta posição e direção para ir à direita
+      car.x = MAIN_ROAD_X - LANE_OFFSET;
+      car.dx = 1;
+      car.dy = 0;
+      car.turnsRight = false;
+    }
+
+    // Curva para cima se necessário (lógica existente para turnsUp)
     if (car.turnsUp && car.dx === 1 && car.x >= MAIN_ROAD_X + LANE_OFFSET) {
-      // Ajusta posição e direção; desativa will-turn-up
       car.x = MAIN_ROAD_X + LANE_OFFSET;
       car.dx = 0;
       car.dy = -1;
       car.turnsUp = false;
     }
 
-    // Verifica semáforo: se habilitado e não estiver verde, marca para parar
+    // Se semáforos habilitados, freia conforme fase
     if (signalsEnabled) {
       if (
-        car.dy === 1 && // Carro descendo verticalmente
+        car.dy === 1 &&
         car.y + car.radius >= TOP_ROAD_Y - ROAD_WIDTH / 2 &&
         car.y <= TOP_ROAD_Y + ROAD_WIDTH / 2 - 100
       ) {
         if (currentPhase !== 0) willStop[i] = true;
-
       } else if (
-        car.dy === -1 && // Carro subindo verticalmente
+        car.dy === -1 &&
         car.y - car.radius <= TOP_ROAD_Y + ROAD_WIDTH / 2 &&
         car.y >= TOP_ROAD_Y - ROAD_WIDTH / 2
       ) {
         if (currentPhase !== 1) willStop[i] = true;
-
       } else if (
-        car.dx === -1 && // Carro indo da direita para a esquerda
+        car.dx === -1 &&
         car.y < TOP_ROAD_Y + ROAD_WIDTH / 2 &&
         car.x - car.radius <= MAIN_ROAD_X + ROAD_WIDTH / 2 &&
         car.x >= MAIN_ROAD_X - ROAD_WIDTH / 2
@@ -221,17 +257,15 @@ function updateCars(dt) {
       }
     }
 
-    // Verifica se há carro muito próximo à frente na mesma direção
+    // Verifica proximidade de outros carros na mesma direção/pista
     for (let j = 0; j < cars.length; j++) {
       if (i === j) continue;
       const other = cars[j];
       if (car.dx === other.dx && car.dy === other.dy) {
-        // Mesma pista: X próximo quando vertical, Y próximo quando horizontal
         const sameLane = (
           (car.dx === 0 && Math.abs(car.x - other.x) < 1) ||
           (car.dy === 0 && Math.abs(car.y - other.y) < 1)
         );
-        // Verifica se o outro carro está à frente
         const inFront = (
           (car.dy === 1 && other.y > car.y) ||
           (car.dy === -1 && other.y < car.y) ||
@@ -248,14 +282,13 @@ function updateCars(dt) {
     }
   }
 
-  // Segundo passo: atualiza posição dos carros que não devem parar
+  // Segundo passo: movimenta quem não deve parar e verifica colisões futuras
   for (let i = 0; i < cars.length; i++) {
-    if (willStop[i]) continue; // Pula carros que devem parar
+    if (willStop[i]) continue;
     const car = cars[i];
     const nextX = car.x + car.dx * car.speed * dt / 1000;
     const nextY = car.y + car.dy * car.speed * dt / 1000;
 
-    // Verifica colisão futura com outros carros
     for (let j = 0; j < cars.length; j++) {
       if (i === j || willStop[j]) continue;
       const other = cars[j];
@@ -263,16 +296,13 @@ function updateCars(dt) {
       const otherNextY = other.y + other.dy * other.speed * dt / 1000;
       const dist = Math.hypot(nextX - otherNextX, nextY - otherNextY);
       if (dist < car.radius + other.radius) {
-        // Em caso de colisão, ambos param
         willStop[i] = true;
         willStop[j] = true;
-
         car.collided = true;
         other.collided = true;
       }
     }
 
-    // Atualiza posição se não houver necessidade de parar
     if (!willStop[i]) {
       car.x += car.dx * car.speed * dt / 1000;
       car.y += car.dy * car.speed * dt / 1000;
@@ -280,81 +310,70 @@ function updateCars(dt) {
   }
 }
 
-// Função para reiniciar a simulação
+// Reinicia a simulação
 function resetSimulation() {
-  // Cancela qualquer animação pendente
   if (animationId) {
     cancelAnimationFrame(animationId);
   }
-  // Zera estados de semáforo
   currentPhase = 0;
   phaseTime = 0;
-  // Zera tempo de início para que animate trate como nova simulação
   startTime = null;
-  // Zera última marcação de tempo em animate
   animate.lastTime = undefined;
-  // Re-inicializa carros
   initCars();
-  // Limpa o canvas imediatamente (opcional)
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  // Redesenha estado inicial (opcional)
   drawRoads();
   drawTrafficLights();
   drawCars();
-  // Reinicia o loop de animação
   animationId = requestAnimationFrame(animate);
 }
 
-// Laço principal de animação, chamado por requestAnimationFrame
-// timestamp: tempo (ms) atual fornecido pelo navegador
+// Loop principal
 function animate(timestamp) {
-  if (!startTime) startTime = timestamp; // Define o momento inicial
+  if (!startTime) startTime = timestamp;
   const elapsed = timestamp - startTime;
 
-  // Para a simulação se ultrapassar a duração configurada
   if (elapsed >= SIM_DURATION_MS) return cancelAnimationFrame(animationId);
 
-  // Calcula delta time (dt) desde o último quadro
   const dt = elapsed - (animate.lastTime || elapsed);
   animate.lastTime = elapsed;
 
-  // Limpa o canvas antes de redesenhar
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  // Desenha estradas e viaduto
   drawRoads();
-  // Atualiza fase dos semáforos (se habilitado)
   updateLights(dt);
-  // Desenha semáforos (se habilitado)
   drawTrafficLights();
-  // Atualiza posição dos carros
   updateCars(dt);
-  // Desenha carros
   drawCars();
 
-  // Chama o próximo frame
   animationId = requestAnimationFrame(animate);
 }
 
-// Configura listener do botão após o DOM carregar
+// Configura listeners após DOM carregar
 window.addEventListener('DOMContentLoaded', () => {
   const resetBtn = document.getElementById('resetBtn');
   const toggleSignalsBtn = document.getElementById('toggleSignalsBtn');
+  const toggleViaductBtn = document.getElementById('toggleViaductBtn');
 
   resetBtn.addEventListener('click', () => {
-    // Reinicia simulação, mantendo o estado atual de signalsEnabled
     resetSimulation();
   });
 
   toggleSignalsBtn.addEventListener('click', () => {
-    // Alterna habilitação dos semáforos
     signalsEnabled = !signalsEnabled;
-    // Atualiza texto do botão conforme estado
     toggleSignalsBtn.textContent = signalsEnabled ? 'Desabilitar Semáforos' : 'Habilitar Semáforos';
-    // Reinicia simulação quando trocar o estado dos semáforos
+    resetSimulation();
+  });
+
+  toggleViaductBtn.addEventListener('click', () => {
+    useSecondViaduct = !useSecondViaduct;
+    if (useSecondViaduct) {
+      toggleViaductBtn.textContent = 'Mudar para o primeiro viaduto (saída para Maringá)';
+    } else {
+      toggleViaductBtn.textContent = 'Mudar para o segundo viaduto (saída para Água boa)';
+    }
     resetSimulation();
   });
 });
 
-// Inicializa carros e inicia o loop de animação na carga inicial
+// Inicializa na carga
 initCars();
 animationId = requestAnimationFrame(animate);
