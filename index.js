@@ -4,11 +4,13 @@ const ctx = canvas.getContext('2d');
 
 // Duração total da simulação em milissegundos
 const SIM_DURATION_MS = 60 * 1000;
+
 // Cores utilizadas para desenhar estradas, viaduto e carros
 const ROAD_COLOR = '#999';
 const VIADUCT_COLOR = '#777';
 const CAR_COLOR = '#3498db';
-const CAR_COLLIDED_COLOR ='#e67e22';
+const CAR_COLLIDED_COLOR = '#e67e22';
+
 // Tamanho do raio dos carros em pixels
 const CAR_RADIUS = 8;
 // Largura das estradas em pixels
@@ -44,6 +46,9 @@ let phaseTime = 0;      // Tempo decorrido na fase atual
 let startTime = null;   // Marca de tempo do início da simulação
 let animationId = null; // ID retornado por requestAnimationFrame
 const cars = [];        // Array que armazena todos os carros na simulação
+
+// Flag para habilitar/desabilitar semáforos
+let signalsEnabled = true;
 
 // Função para adicionar um carro ao array de carros
 // x: posição inicial X do carro
@@ -128,6 +133,8 @@ function drawRoads() {
 // Desenha os semáforos posicionados no cruzamento
 // Cada objeto em "lights" contém x, y e a fase em que fica verde
 function drawTrafficLights() {
+  if (!signalsEnabled) return;  // Se semáforos desabilitados, não desenha nada
+
   const centerX = MAIN_ROAD_X;
   const centerY = TOP_ROAD_Y;
 
@@ -148,7 +155,7 @@ function drawTrafficLights() {
 
 // Desenha todos os carros presentes no array "cars"
 function drawCars() {
-    for (const car of cars) {
+  for (const car of cars) {
     ctx.fillStyle = car.collided ? CAR_COLLIDED_COLOR : CAR_COLOR;
     ctx.beginPath();
     ctx.arc(car.x, car.y, car.radius, 0, 2 * Math.PI);
@@ -159,6 +166,8 @@ function drawCars() {
 // Atualiza o temporizador dos semáforos e alterna a fase quando o tempo excede PHASE_DURATION
 // dt: delta time em milissegundos desde a última atualização
 function updateLights(dt) {
+  if (!signalsEnabled) return;  // Se semáforos desabilitados, não atualiza fases
+
   phaseTime += dt;
   if (phaseTime >= PHASE_DURATION) {
     // Avança para a próxima fase (cíclica de 0 a 2)
@@ -173,7 +182,7 @@ function updateCars(dt) {
   // Indica se cada carro deve parar nesta iteração
   const willStop = Array(cars.length).fill(false);
 
-  // Primeiro passo: verifica semáforo e carros à frente
+  // Primeiro passo: verifica semáforo (se habilitado) e carros à frente
   for (let i = 0; i < cars.length; i++) {
     const car = cars[i];
 
@@ -186,28 +195,30 @@ function updateCars(dt) {
       car.turnsUp = false;
     }
 
-    // Verifica semáforo: se não estiver verde, marca para parar
-    if (
-      car.dy === 1 && // Carro descendo verticalmente
-      car.y + car.radius >= TOP_ROAD_Y - ROAD_WIDTH / 2 &&
-      car.y <= TOP_ROAD_Y + ROAD_WIDTH / 2 - 100
-    ) {
-      if (currentPhase !== 0) willStop[i] = true;
+    // Verifica semáforo: se habilitado e não estiver verde, marca para parar
+    if (signalsEnabled) {
+      if (
+        car.dy === 1 && // Carro descendo verticalmente
+        car.y + car.radius >= TOP_ROAD_Y - ROAD_WIDTH / 2 &&
+        car.y <= TOP_ROAD_Y + ROAD_WIDTH / 2 - 100
+      ) {
+        if (currentPhase !== 0) willStop[i] = true;
 
-    } else if (
-      car.dy === -1 && // Carro subindo verticalmente
-      car.y - car.radius <= TOP_ROAD_Y + ROAD_WIDTH / 2 &&
-      car.y >= TOP_ROAD_Y - ROAD_WIDTH / 2
-    ) {
-      if (currentPhase !== 1) willStop[i] = true;
+      } else if (
+        car.dy === -1 && // Carro subindo verticalmente
+        car.y - car.radius <= TOP_ROAD_Y + ROAD_WIDTH / 2 &&
+        car.y >= TOP_ROAD_Y - ROAD_WIDTH / 2
+      ) {
+        if (currentPhase !== 1) willStop[i] = true;
 
-    } else if (
-      car.dx === -1 && // Carro indo da direita para a esquerda
-      car.y < TOP_ROAD_Y + ROAD_WIDTH / 2 &&
-      car.x - car.radius <= MAIN_ROAD_X + ROAD_WIDTH / 2 &&
-      car.x >= MAIN_ROAD_X - ROAD_WIDTH / 2
-    ) {
-      if (currentPhase !== 2) willStop[i] = true;
+      } else if (
+        car.dx === -1 && // Carro indo da direita para a esquerda
+        car.y < TOP_ROAD_Y + ROAD_WIDTH / 2 &&
+        car.x - car.radius <= MAIN_ROAD_X + ROAD_WIDTH / 2 &&
+        car.x >= MAIN_ROAD_X - ROAD_WIDTH / 2
+      ) {
+        if (currentPhase !== 2) willStop[i] = true;
+      }
     }
 
     // Verifica se há carro muito próximo à frente na mesma direção
@@ -269,6 +280,7 @@ function updateCars(dt) {
   }
 }
 
+// Função para reiniciar a simulação
 function resetSimulation() {
   // Cancela qualquer animação pendente
   if (animationId) {
@@ -293,12 +305,6 @@ function resetSimulation() {
   animationId = requestAnimationFrame(animate);
 }
 
-// Configura listener do botão após o DOM carregar
-window.addEventListener('DOMContentLoaded', () => {
-  const resetBtn = document.getElementById('resetBtn');
-  resetBtn.addEventListener('click', resetSimulation);
-});
-
 // Laço principal de animação, chamado por requestAnimationFrame
 // timestamp: tempo (ms) atual fornecido pelo navegador
 function animate(timestamp) {
@@ -316,9 +322,9 @@ function animate(timestamp) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   // Desenha estradas e viaduto
   drawRoads();
-  // Atualiza fase dos semáforos
+  // Atualiza fase dos semáforos (se habilitado)
   updateLights(dt);
-  // Desenha semáforos
+  // Desenha semáforos (se habilitado)
   drawTrafficLights();
   // Atualiza posição dos carros
   updateCars(dt);
@@ -329,6 +335,26 @@ function animate(timestamp) {
   animationId = requestAnimationFrame(animate);
 }
 
-// Inicializa carros e inicia o loop de animação
+// Configura listener do botão após o DOM carregar
+window.addEventListener('DOMContentLoaded', () => {
+  const resetBtn = document.getElementById('resetBtn');
+  const toggleSignalsBtn = document.getElementById('toggleSignalsBtn');
+
+  resetBtn.addEventListener('click', () => {
+    // Reinicia simulação, mantendo o estado atual de signalsEnabled
+    resetSimulation();
+  });
+
+  toggleSignalsBtn.addEventListener('click', () => {
+    // Alterna habilitação dos semáforos
+    signalsEnabled = !signalsEnabled;
+    // Atualiza texto do botão conforme estado
+    toggleSignalsBtn.textContent = signalsEnabled ? 'Desabilitar Semáforos' : 'Habilitar Semáforos';
+    // Reinicia simulação quando trocar o estado dos semáforos
+    resetSimulation();
+  });
+});
+
+// Inicializa carros e inicia o loop de animação na carga inicial
 initCars();
 animationId = requestAnimationFrame(animate);
