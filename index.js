@@ -265,6 +265,36 @@ function updateCars(dt) {
   }
 }
 
+function resetSimulation() {
+  // Cancela qualquer animação pendente
+  if (animationId) {
+    cancelAnimationFrame(animationId);
+  }
+  // Zera estados de semáforo
+  currentPhase = 0;
+  phaseTime = 0;
+  // Zera tempo de início para que animate trate como nova simulação
+  startTime = null;
+  // Zera última marcação de tempo em animate
+  animate.lastTime = undefined;
+  // Re-inicializa carros
+  initCars();
+  // Limpa o canvas imediatamente (opcional)
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Redesenha estado inicial (opcional)
+  drawRoads();
+  drawTrafficLights();
+  drawCars();
+  // Reinicia o loop de animação
+  animationId = requestAnimationFrame(animate);
+}
+
+// Configura listener do botão após o DOM carregar
+window.addEventListener('DOMContentLoaded', () => {
+  const resetBtn = document.getElementById('resetBtn');
+  resetBtn.addEventListener('click', resetSimulation);
+});
+
 // Laço principal de animação, chamado por requestAnimationFrame
 // timestamp: tempo (ms) atual fornecido pelo navegador
 function animate(timestamp) {
