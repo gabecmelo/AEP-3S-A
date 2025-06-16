@@ -99,7 +99,6 @@ function initCars() {
         0,
         -1
       );
-      // opcional: se quiser curva ao encontrar cruzamento, mas não foi solicitado
     }
   }
 
